@@ -1,7 +1,9 @@
-fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
+use crate::sha2::constants;
+use crate::sha2::utils::mixing_functions::Word;
+pub fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
     let [a, b, c, d, e, f, g, h] = hash;
 
-    let (h1, h2) = unsafe {
+    let (h1, h2) = {
         let a_init: [u32; 4] = hash[0..4].try_into().unwrap();
         let b_init: [u32; 4] = hash[4..8].try_into().unwrap();
 
@@ -15,22 +17,22 @@ fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
         let mut m3 = load_be_u32x4(content, 48); // W12..W15
 
         // Rounds 0..15.
-        let wk = add4(m0, load_k4_at(&self.table, 0));
+        let wk = add4(m0, load_k4_at(&constants::SHA256_K, 0));
         rounds4(&mut A, &mut B, &wk);
 
-        let wk = add4(m1, load_k4_at(&self.table, 4));
+        let wk = add4(m1, load_k4_at(&constants::SHA256_K, 4));
         rounds4(&mut A, &mut B, &wk);
 
-        let wk = add4(m2, load_k4_at(&self.table, 8));
+        let wk = add4(m2, load_k4_at(&constants::SHA256_K, 8));
         rounds4(&mut A, &mut B, &wk);
 
-        let wk = add4(m3, load_k4_at(&self.table, 12));
+        let wk = add4(m3, load_k4_at(&constants::SHA256_K, 12));
         rounds4(&mut A, &mut B, &wk);
 
         for block in 0..12 {
             let next = message_schedule_batch(&mut m0, &mut m1, &mut m2, &mut m3);
 
-            let kt = load_k4_at(&self.table, 4 * block + 16);
+            let kt = load_k4_at(&constants::SHA256_K, 4 * block + 16);
             let k = add4(next, kt);
 
             // Computes 4 rounds
@@ -50,14 +52,26 @@ fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
 
     let [e, f, g, h] = h2;
     let [a, b, c, d] = h1;
-    hash = [a, b, c, d, e, f, g, h];
+    hash.copy_from_slice(&[a, b, c, d, e, f, g, h]);
 }
 
 fn message_schedule_batch(m0: &[u32; 4], m1: &[u32; 4], m2: &[u32; 4], m3: &[u32; 4]) -> [u32; 4] {
-    let m4_0 = u32::ssig1(m3[2]) + m2[1] + u32::ssig0(m0[1]) + m0[0];
-    let m4_1 = u32::ssig1(m3[3]) + m2[2] + u32::ssig0(m0[2]) + m0[1];
-    let m4_2 = u32::ssig1(m4_0) + m2[3] + u32::ssig0(m0[3]) + m0[2];
-    let m4_3 = u32::ssig1(m4_1) + m3[0] + u32::ssig0(m1[0]) + m0[3];
+    let m4_0 = u32::ssig1(m3[2])
+        .wrapping_add(m2[1])
+        .wrapping_add(u32::ssig0(m0[1]))
+        .wrapping_add(m0[0]);
+    let m4_1 = u32::ssig1(m3[3])
+        .wrapping_add(m2[2])
+        .wrapping_add(u32::ssig0(m0[2]))
+        .wrapping_add(m0[1]);
+    let m4_2 = u32::ssig1(m4_0)
+        .wrapping_add(m2[3])
+        .wrapping_add(u32::ssig0(m0[3]))
+        .wrapping_add(m0[2]);
+    let m4_3 = u32::ssig1(m4_1)
+        .wrapping_add(m3[0])
+        .wrapping_add(u32::ssig0(m1[0]))
+        .wrapping_add(m0[3]);
     [m4_0, m4_1, m4_2, m4_3]
 }
 
@@ -75,11 +89,11 @@ fn rounds4(upper: &mut [u32; 4], lower: &mut [u32; 4], wk: &[u32; 4]) {
 
     for i in 0..4 {
         let t1 = h
-            .wrapping_add(u32::ssig1(e))
+            .wrapping_add(u32::bsig1(e))
             .wrapping_add(u32::ch(e, f, g))
             .wrapping_add(wk[i]);
 
-        let t2 = u32::ssig0(a).wrapping_add(u32::maj(a, b, c));
+        let t2 = u32::bsig0(a).wrapping_add(u32::maj(a, b, c));
 
         h = g;
         g = f;

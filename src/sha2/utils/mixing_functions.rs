@@ -1,4 +1,4 @@
-trait Word: Sized {
+pub trait Word: Sized {
     const BITS: u32;
     fn shr<const N: u32>(self) -> Self;
     fn rotr<const N: u32>(self) -> Self;

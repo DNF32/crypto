@@ -1,16 +1,19 @@
+use std::arch::aarch64::vld1q_u32;
+#[cfg(target_arch = "aarch64")]
+use std::arch::aarch64::{uint32x4_t, vsha256su0q_u32, vsha256su1q_u32};
+
+use crate::sha2::constants;
 #[cfg(target_arch = "aarch64")]
 #[inline]
-fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
-    let [a, b, c, d, e, f, g, h] = hash;
-
+pub fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
     let mut h1 = [0u32; 4];
     let mut h2 = [0u32; 4];
 
     unsafe {
         use std::arch::aarch64::{vaddq_u32, vld1q_u32, vst1q_u32};
 
-        let a_init = vld1q_u32(self.hash[0..4].as_ptr());
-        let b_init = vld1q_u32(self.hash[4..].as_ptr());
+        let a_init = vld1q_u32(hash[0..4].as_ptr());
+        let b_init = vld1q_u32(hash[4..].as_ptr());
 
         let mut A = a_init;
         let mut B = b_init;
@@ -22,22 +25,22 @@ fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
         let mut m3 = load_be_u32x4(content, 48); // W12..W15
 
         // Rounds 0..15.
-        let wk = vaddq_u32(m0, load_k4_at(&self.table, 0));
+        let wk = vaddq_u32(m0, load_k4_at(&constants::SHA256_K, 0));
         rounds4(&mut A, &mut B, &wk);
 
-        let wk = vaddq_u32(m1, load_k4_at(&self.table, 4));
+        let wk = vaddq_u32(m1, load_k4_at(&constants::SHA256_K, 4));
         rounds4(&mut A, &mut B, &wk);
 
-        let wk = vaddq_u32(m2, load_k4_at(&self.table, 8));
+        let wk = vaddq_u32(m2, load_k4_at(&constants::SHA256_K, 8));
         rounds4(&mut A, &mut B, &wk);
 
-        let wk = vaddq_u32(m3, load_k4_at(&self.table, 12));
+        let wk = vaddq_u32(m3, load_k4_at(&constants::SHA256_K, 12));
         rounds4(&mut A, &mut B, &wk);
 
         for block in 0..12 {
             let next = message_schedule(&mut m0, &mut m1, &mut m2, &mut m3);
 
-            let kt = load_k4_at(&self.table, 4 * block + 16);
+            let kt = load_k4_at(&constants::SHA256_K, 4 * block + 16);
             let k = vaddq_u32(next, kt);
 
             // Computes 4 rounds
@@ -59,7 +62,7 @@ fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
 
     let [e, f, g, h] = h2;
     let [a, b, c, d] = h1;
-    hash = [a, b, c, d, e, f, g, h];
+    hash.copy_from_slice(&[a, b, c, d, e, f, g, h]);
 }
 
 #[cfg(target_arch = "aarch64")]
@@ -91,7 +94,7 @@ unsafe fn message_schedule(
 }
 
 #[inline]
-fn load_be_u32x4(content: &[u8; 64], offset: usize) -> [u32; 4] {
+fn load_be_u32x4(content: &[u8; 64], offset: usize) -> uint32x4_t {
     let w0 = u32::from_be_bytes([
         content[offset],
         content[offset + 1],
@@ -120,7 +123,7 @@ fn load_be_u32x4(content: &[u8; 64], offset: usize) -> [u32; 4] {
         content[offset + 15],
     ]);
 
-    [w0, w1, w2, w3]
+    unsafe { vld1q_u32([w0, w1, w2, w3].as_ptr()) }
 }
 
 #[cfg(target_arch = "aarch64")]

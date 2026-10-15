@@ -1,58 +1,60 @@
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "sha")]
 #[inline]
-unsafe fn x86_process_block_concurrent(hash: &mut [u32; 8], content: &[u8; 64]) {
+pub(super) fn process(hash: &mut [u32; 8], content: &[u8; 64]) {
     let [a, b, c, d, e, f, g, h] = hash;
 
     let mut h1 = [0u32; 4];
     let mut h2 = [0u32; 4];
 
-    let a_init = _mm_set_epi32(c as i32, d as i32, g as i32, h as i32);
-    let b_init = _mm_set_epi32(a as i32, b as i32, e as i32, f as i32);
+    unsafe {
+        let a_init = _mm_set_epi32(c as i32, d as i32, g as i32, h as i32);
+        let b_init = _mm_set_epi32(a as i32, b as i32, e as i32, f as i32);
 
-    let mut A = a_init;
-    let mut B = b_init;
+        let mut A = a_init;
+        let mut B = b_init;
 
-    // W0..W15, four schedule words per vector.
-    let mut m0 = load_be_m128i(content, 0); // W0..W3
-    let mut m1 = load_be_m128i(content, 16); // W4..W7
-    let mut m2 = load_be_m128i(content, 32); // W8..W11
-    let mut m3 = load_be_m128i(content, 48); // W12..W15
+        // W0..W15, four schedule words per vector.
+        let mut m0 = load_be_m128i(content, 0); // W0..W3
+        let mut m1 = load_be_m128i(content, 16); // W4..W7
+        let mut m2 = load_be_m128i(content, 32); // W8..W11
+        let mut m3 = load_be_m128i(content, 48); // W12..W15
 
-    // Rounds 0..15.
-    let wk = _mm_add_epi32(m0, load_k4_at(&self.table, 0));
-    x86_rounds4(&mut A, &mut B, &wk);
+        // Rounds 0..15.
+        let wk = _mm_add_epi32(m0, load_k4_at(&self.table, 0));
+        x86_rounds4(&mut A, &mut B, &wk);
 
-    let wk = _mm_add_epi32(m1, load_k4_at(&self.table, 4));
-    x86_rounds4(&mut A, &mut B, &wk);
+        let wk = _mm_add_epi32(m1, load_k4_at(&self.table, 4));
+        x86_rounds4(&mut A, &mut B, &wk);
 
-    let wk = _mm_add_epi32(m2, load_k4_at(&self.table, 8));
-    x86_rounds4(&mut A, &mut B, &wk);
+        let wk = _mm_add_epi32(m2, load_k4_at(&self.table, 8));
+        x86_rounds4(&mut A, &mut B, &wk);
 
-    let wk = _mm_add_epi32(m3, load_k4_at(&self.table, 12));
-    x86_rounds4(&mut A, &mut B, &wk);
+        let wk = _mm_add_epi32(m3, load_k4_at(&self.table, 12));
+        x86_rounds4(&mut A, &mut B, &wk);
 
-    for block in 0..12 {
-        let next = x86_message_schedule_simd_batch(&mut m0, &mut m1, &mut m2, &mut m3);
+        for block in 0..12 {
+            let next = x86_message_schedule_simd_batch(&mut m0, &mut m1, &mut m2, &mut m3);
 
-        let kt = load_k4_at(&self.table, 4 * block + 16);
-        let k = _mm_add_epi32(next, kt);
+            let kt = load_k4_at(&self.table, 4 * block + 16);
+            let k = _mm_add_epi32(next, kt);
 
-        // Computes 4 rounds
-        x86_rounds4(&mut A, &mut B, &k);
+            // Computes 4 rounds
+            x86_rounds4(&mut A, &mut B, &k);
 
-        // Shift the message to compute on the next round
-        m0 = m1;
-        m1 = m2;
-        m2 = m3;
-        m3 = next;
+            // Shift the message to compute on the next round
+            m0 = m1;
+            m1 = m2;
+            m2 = m3;
+            m3 = next;
+        }
+
+        A = _mm_add_epi32(A, a_init);
+        B = _mm_add_epi32(B, b_init);
+
+        _mm_storeu_si128(h1.as_mut_ptr().add(0) as *mut __m128i, A);
+        _mm_storeu_si128(h2.as_mut_ptr().add(0) as *mut __m128i, B);
     }
-
-    A = _mm_add_epi32(A, a_init);
-    B = _mm_add_epi32(B, b_init);
-
-    _mm_storeu_si128(h1.as_mut_ptr().add(0) as *mut __m128i, A);
-    _mm_storeu_si128(h2.as_mut_ptr().add(0) as *mut __m128i, B);
 
     let [f, e, b, a] = h2;
     let [h, g, d, c] = h1;

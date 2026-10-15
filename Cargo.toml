@@ -1,5 +1,5 @@
 [package]
-name = "md5"
+name = "crypto"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,5 +7,8 @@ edition = "2024"
 md-5 = "0.11.0"
 
 [[bin]]
-name = "ccmd5"
+name = "crypto"
 path = "src/main.rs"
+
+[profile.release]
+debug = "line-tables-only"
